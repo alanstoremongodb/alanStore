@@ -1,0 +1,62 @@
+html, body, #root{
+    height: 100%;
+}
+html, body{
+    margin: 0;
+    padding: 0;
+}
+body{
+    background-color: #000; 
+}
+
+main{
+        background-color: #000; 
+}
+
+/* Darken the native datepicker popup and make the calendar icon visible on dark inputs */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"]{
+    color-scheme: dark; /* makes the popup use dark theme in Chromium */
+}
+
+/* Calendar icon to white on dark backgrounds (Chromium/WebKit) */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator{
+    filter: invert(1);
+    opacity: 1;
+}
+
+/* Explicit white calendar icon where needed */
+.date-icon-white::-webkit-calendar-picker-indicator{
+    /* En algunos Edge/Chrome el filtro se ignora; como fallback lo ocultamos */
+    opacity: 0 !important;
+}
+
+/* Aumentamos la especificidad por si hay overrides del theme */
+input.date-icon-white[type="date"]::-webkit-calendar-picker-indicator{
+    opacity: 0 !important; /* oculto el nativo y muestro un SVG blanco como fondo */
+}
+
+/* En algunos temas el icono hereda opacidad; la forzamos */
+input.date-icon-white[type="date"]{
+    color-scheme: dark; /* asegura popup oscuro */
+    /* Ícono calendario blanco superpuesto */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1zm12 8H5v10h14V10zM7 8h10V6H7v2z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px 18px;
+    padding-right: 40px !important; /* espacio para el icono */
+}
+
+/* (Opcional) Si Firefox soporta el pseudo-elemento, lo ocultamos también */
+.date-icon-white::-moz-calendar-picker-indicator{
+    opacity: 0 !important;
+}
+
+/* Optional: ensure focus ring is visible in dark */
+input:focus, select:focus, textarea:focus{
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.12);
+}

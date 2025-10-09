@@ -1,0 +1,88 @@
+/* SweetAlert2 - Paleta negra consistente con Barrios */
+
+.sw-mobile.sw-dark.swal2-popup {
+  background: #111214; /* surface */
+  color: #F2F2F7;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.6);
+  width: min(560px, 96vw);
+  padding: 10px 10px 18px; /* pequeño margen lateral visible */
+}
+
+/* Texto */
+.swal2-title { color: #F2F2F7; }
+.swal2-html-container { color: #F2F2F7; }
+
+/* Botones (usamos buttonsStyling=false + clases propias) */
+/* Botón primario en paleta oscura (sin morado) */
+.sw-btn.btn-primary {
+  background-color: #2C2C2E; /* surface-2 */
+  border-color: #2C2C2E;
+  color: #fff;
+}
+.sw-btn.btn-primary:hover { background-color: #34353A; border-color: #34353A; }
+
+.sw-btn.btn-outline-secondary {
+  border-color: rgba(255,255,255,.12);
+  color: #F2F2F7;
+  background: transparent;
+}
+.sw-btn.btn-outline-secondary:hover { background: rgba(255,255,255,.06); }
+
+.swal2-actions { gap: 12px; }
+.swal2-actions .sw-btn { border-radius: 12px; padding: 10px 18px; font-weight: 700 }
+/* Asegurar orden: Confirm primero, Cancel luego y apilar vertical */
+.swal2-actions { display: flex; flex-direction: column; align-items: stretch; margin-top: 30px; }
+.swal2-actions .sw-btn { width: 100%; }
+.swal2-actions .swal2-confirm { order: 1; }
+.swal2-actions .swal2-cancel { order: 2; }
+
+/* Ensanchar visualmente los botones en móvil/oscuro estirando el contenedor a los bordes del popup */
+.sw-mobile.sw-dark .swal2-actions {
+  align-self: stretch;
+  width: auto;
+  margin-left: 25px;  /* deja ~6px de gutter (10px - 4px) */
+  margin-right: 25px; /* deja ~6px de gutter (10px - 4px) */
+}
+
+/* Inputs en modal (soporta tanto inputs propios como los de SweetAlert) */
+.swal2-input, .swal2-textarea, .swal2-select,
+.sw-mobile.sw-dark .form-control, .sw-mobile.sw-dark textarea.form-control, .sw-mobile.sw-dark select.form-select {
+  background: #1A1B1E; /* surface-2 */
+  color: #F2F2F7;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 12px;
+  margin-bottom: 0; /* el espaciado lo da el contenedor con gap */
+  padding: 12px 14px; /* inputs más grandes */
+  font-size: 1rem;
+}
+.swal2-input::placeholder, .swal2-textarea::placeholder,
+.sw-mobile.sw-dark .form-control::placeholder { color: #8E8E93; }
+
+/* Separación vertical entre grupos label+input */
+.sw-mobile.sw-dark .sw-form { display: flex; flex-direction: column; gap: 16px; }
+.sw-mobile.sw-dark .sw-form .sw-field { margin: 0 !important; }
+.sw-mobile.sw-dark .sw-form .sw-field:last-child { margin-bottom: 30px !important; }
+.sw-mobile.sw-dark .sw-form .form-label { display: block; margin-bottom: 10px; color: #F2F2F7; }
+/* Fallback adicional por si gap no aplica por algún override */
+.sw-mobile.sw-dark .sw-form .sw-field + .sw-field { margin-top: 10px !important; }
+/* Si el popup tiene formulario, no agregues margen extra arriba de los botones */
+.sw-mobile.sw-dark.sw-has-form .swal2-actions { margin-top: 8px; }
+
+/* Validación */
+.swal2-validation-message {
+  background: rgba(220,38,38,.15);
+  color: #fff;
+  border: 1px solid rgba(220,38,38,.35);
+  border-radius: 10px;
+}
+
+/* Icono y contenedor */
+.swal2-icon { filter: brightness(1.1) saturate(1.05); }
+
+/* Animaciones (opcional, si existen sw-anim-in/out) */
+.sw-anim-in { animation: swIn .2s ease both; }
+.sw-anim-out { animation: swOut .18s ease both; }
+@keyframes swIn { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+@keyframes swOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.98); } }
