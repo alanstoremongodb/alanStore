@@ -20,6 +20,17 @@ function emitirRefreshToken(user) {
   return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, opts);
 }
 
+function setRefreshCookie(res, refreshToken) {
+  const isProd = (process.env.NODE_ENV || 'development') === 'production';
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días
+  });
+}
+
 class AuthManager {
   // Registro simple
   static async register(req, res) {
@@ -37,16 +48,12 @@ class AuthManager {
       if (existe) return res.status(400).json({ error: 'El usuario ya está registrado' });
 
       const user = await UsuarioModel.create({ usuario, password });
-      const token = emitirToken(user);
+      const accessToken = emitirToken(user);
       const refreshToken = emitirRefreshToken(user);
-
+      setRefreshCookie(res, refreshToken);
       return res.status(201).json({
-        user: { 
-          id: user._id, 
-          usuario: user.usuario
-        },
-        token,
-        refreshToken
+        user: { id: user._id, usuario: user.usuario },
+        accessToken,
       });
     } catch (err) {
       if (err.name === 'ValidationError') {
@@ -68,19 +75,15 @@ class AuthManager {
   const user = await UsuarioModel.findOne({ usuario });
   if (!user) return res.status(400).json({ error: 'Credenciales inválidas' });
 
-  const ok = await user.comparePassword(password);
+      const ok = await user.comparePassword(password);
       if (!ok) return res.status(400).json({ error: 'Credenciales inválidas' });
 
-      const token = emitirToken(user);
+      const accessToken = emitirToken(user);
       const refreshToken = emitirRefreshToken(user);
-
+      setRefreshCookie(res, refreshToken);
       return res.status(200).json({
-        user: { 
-          id: user._id, 
-          usuario: user.usuario
-        },
-        token,
-        refreshToken
+        user: { id: user._id, usuario: user.usuario },
+        accessToken,
       });
     } catch (err) {
       return res.status(500).json({ error: 'Error en login' });
@@ -90,25 +93,22 @@ class AuthManager {
   // Refresh token simple
   static async refreshToken(req, res) {
     try {
-      const { refreshToken } = req.body;
-      if (!refreshToken) {
-        return res.status(400).json({ error: 'Refresh token requerido' });
-      }
+      const fromCookie = req.cookies?.refreshToken;
+      const fromBody = req.body?.refreshToken;
+      const incoming = fromCookie || fromBody;
+      if (!incoming) return res.status(400).json({ error: 'Refresh token requerido' });
 
-      const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      const payload = jwt.verify(incoming, process.env.JWT_REFRESH_SECRET);
       const user = await UsuarioModel.findById(payload.sub);
 
       if (!user) {
         return res.status(401).json({ error: 'Usuario no encontrado' });
       }
 
-      const newToken = emitirToken(user);
+      const accessToken = emitirToken(user);
       const newRefreshToken = emitirRefreshToken(user);
-
-      return res.status(200).json({
-        token: newToken,
-        refreshToken: newRefreshToken
-      });
+      setRefreshCookie(res, newRefreshToken);
+      return res.status(200).json({ accessToken });
     } catch (err) {
       return res.status(401).json({ error: 'Refresh token inválido o expirado' });
     }
@@ -117,6 +117,13 @@ class AuthManager {
   // Logout simple
   static async logout(req, res) {
     try {
+      const isProd = (process.env.NODE_ENV || 'development') === 'production';
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
+        path: '/',
+      });
       return res.status(200).json({ message: 'Logout exitoso' });
     } catch (err) {
       return res.status(500).json({ error: 'Error en logout' });

@@ -36,16 +36,18 @@ app.set('views', path.join(__dirname, 'views'));
 
 // CORS: permitir múltiples orígenes separados por coma en CORS_ORIGIN
 const rawOrigins = process.env.CORS_ORIGIN || '';
+const normalizeOrigin = (s) => (s || '').trim().replace(/\/$/, '').toLowerCase();
 const allowedOrigins = rawOrigins
   .split(',')
-  .map(o => o.trim())
+  .map(o => normalizeOrigin(o))
   .filter(Boolean);
 
 const corsConfig = {
   origin: (origin, callback) => {
     // permitir herramientas server-to-server (sin origin) o coincidencias explícitas
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    const normalized = normalizeOrigin(origin);
+    if (allowedOrigins.includes(normalized)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
