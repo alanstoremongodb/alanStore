@@ -1,116 +1,178 @@
 import jwt from 'jsonwebtoken';
-import UsuarioModel from '../models/Usuario.model.js'; // 👈 crea este archivo con tu schema pegado
+import UsuarioModel from '../models/Usuario.model.js';
 
-const isProd = process.env.NODE_ENV === 'production';
-
-function signAccess(payload) {
-  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: process.env.JWT_ACCESS_TTL || '15m'
-  });
-}
-function signRefresh(payload) {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: process.env.JWT_REFRESH_TTL || '7d'
-  });
+// Función simple para emitir token - sin complicaciones
+function emitirToken(user) {
+  const payload = { 
+    sub: user._id.toString(), 
+    usuario: user.usuario
+  };
+  const opts = { expiresIn: process.env.JWT_EXPIRES_IN || '7d' };
+  return jwt.sign(payload, process.env.JWT_SECRET, opts);
 }
 
-function setRefreshCookie(res, token) {
-  res.cookie('refreshToken', token, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/auth/refresh' // la cookie solo viaja a este endpoint
-  });
+function emitirRefreshToken(user) {
+  const payload = { 
+    sub: user._id.toString(), 
+    tipo: 'refresh' 
+  };
+  const opts = { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' };
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, opts);
 }
 
-export default class AuthManager {
-  // crea un usuario bootstrap si no existe
-  static async bootstrapAdmin() {
-    try {
-      const usuario = process.env.ADMIN_USUARIO;
-      const password = process.env.ADMIN_PASSWORD;
-      const nombre = process.env.ADMIN_NOMBRE || 'Admin';
-
-      if (!usuario || !password) return;
-
-      const exists = await UsuarioModel.findOne({ usuario });
-      if (!exists) {
-        await UsuarioModel.create({ usuario, password, nombre });
-        console.log(`✅ Usuario bootstrap creado: ${usuario}`);
-      }
-    } catch (e) {
-      console.error('❌ Error en bootstrap admin:', e.message);
-    }
-  }
-
+class AuthManager {
+  // Registro simple
   static async register(req, res) {
     try {
-      const { usuario, password, nombre } = req.body;
-      if (!usuario || !password) return res.status(400).json({ error: 'Usuario y password son obligatorios' });
+      const { usuario, password } = req.body;
+      if (!usuario || !password) {
+        return res.status(400).json({ error: 'usuario y password son obligatorios' });
+      }
 
-      const dup = await UsuarioModel.findOne({ usuario: String(usuario).toLowerCase().trim() });
-      if (dup) return res.status(409).json({ error: 'El usuario ya existe' });
+      if (password.length < 4) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+      }
 
-      const user = await UsuarioModel.create({ usuario, password, nombre });
-      return res.status(201).json({ user: user.toJSON() });
-    } catch (e) {
-      return res.status(500).json({ error: 'No se pudo registrar' });
+      const existe = await UsuarioModel.findOne({ usuario });
+      if (existe) return res.status(400).json({ error: 'El usuario ya está registrado' });
+
+      const user = await UsuarioModel.create({ usuario, password });
+      const token = emitirToken(user);
+      const refreshToken = emitirRefreshToken(user);
+
+      return res.status(201).json({
+        user: { 
+          id: user._id, 
+          usuario: user.usuario
+        },
+        token,
+        refreshToken
+      });
+    } catch (err) {U
+      if (err.name === 'ValidationError') {
+        const errores = Object.values(err.errors).map(e => e.message);
+        return res.status(400).json({ error: errores.join(', ') });
+      }
+      return res.status(500).json({ error: 'Error registrando usuario' });
     }
   }
 
+  // Login simple
   static async login(req, res) {
     try {
       const { usuario, password } = req.body;
-      if (!usuario || !password) return res.status(400).json({ error: 'Usuario y password son obligatorios' });
+      if (!usuario || !password) {
+        return res.status(400).json({ error: 'usuario y password son obligatorios' });
+      }
 
-      const user = await UsuarioModel.findOne({ usuario: String(usuario).toLowerCase().trim() });
-      if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
+      const user = await UsuarioModel.findOne({ usuario });
+      if (!user) return res.status(U00).json({ error: 'Credenciales inválidas' });
 
-      const ok = await user.comparePassword(password);
-      if (!ok) return res.status(401).json({ error: 'Credenciales inválidas' });
+      const ok = await user.compararPassword(password);
+      if (!ok) return res.status(400).json({ error: 'Credenciales inválidas' });
 
-      const payload = { sub: String(user._id), usuario: user.usuario, nombre: user.nombre };
-      const accessToken = signAccess(payload);
-      const refreshToken = signRefresh({ sub: payload.sub });
+      const token = emitirToken(user);
+      const refreshToken = emitirRefreshToken(user);
 
-      setRefreshCookie(res, refreshToken);
-
-      return res.status(200).json({ accessToken, user: user.toJSON() });
-    } catch (e) {
-      return res.status(500).json({ error: 'No se pudo iniciar sesión' });
+      return res.status(200).json({
+        user: { 
+          id: user._id, 
+          usuario: user.usuario
+        },
+        token,
+        refreshToken
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error en login' });
     }
   }
 
-  static async refresh(req, res) {
+  // Refresh token simple
+  static async refreshToken(req, res) {
     try {
-      const token = req.cookies?.refreshToken;
-      if (!token) return res.status(401).json({ error: 'No hay refresh token' });
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token requerido' });
+      }
 
-      const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-      const user = await UsuarioModel.findById(decoded.sub);
-      if (!user) return res.status(401).json({ error: 'Usuario inválido' });
+      const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+      const user = await UsuarioModel.findById(payload.sub);
 
-      const accessToken = signAccess({ sub: String(user._id), usuario: user.usuario, nombre: user.nombre });
+      if (!user) {
+        return res.status(401).json({ error: 'Usuario no encontrado' });
+      }
 
-      // rotación simple de refresh
-      const newRefresh = signRefresh({ sub: String(user._id) });
-      setRefreshCookie(res, newRefresh);
+      const newToken = emitirToken(user);
+      const newRefreshToken = emitirRefreshToken(user);
 
-      return res.status(200).json({ accessToken });
-    } catch (e) {
-      return res.status(401).json({ error: 'Refresh inválido o expirado' });
+      return res.status(200).json({
+        token: newToken,
+        refreshToken: newRefreshToken
+      });
+    } catch (err) {
+      return res.status(401).json({ error: 'Refresh token inválido o expirado' });
     }
   }
 
-  static async logout(_req, res) {
-    res.clearCookie('refreshToken', { path: '/auth/refresh' });
-    return res.status(200).json({ success: true });
+  // Logout simple
+  static async logout(req, res) {
+    try {
+      return res.status(200).json({ message: 'Logout exitoso' });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error en logout' });
+    }
   }
 
+  // Obtener info del usuario
   static async me(req, res) {
-    const user = await UsuarioModel.findById(req.user.sub);
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-    return res.status(200).json({ user: user.toJSON() });
+    try {
+      const user = await UsuarioModel.findById(req.user.sub).select('-password');
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      return res.status(200).json({
+        user: {
+          id: user._id,
+          usuario: user.usuario
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error obteniendo información del usuario' });
+    }
+  }
+
+  // Cambiar contraseña
+  static async cambiarPassword(req, res) {
+    try {
+      const { passwordActual, passwordNueva } = req.body;
+      
+      if (!passwordActual || !passwordNueva) {
+        return res.status(400).json({ error: 'Contraseña actual y nueva son obligatorias' });
+      }
+
+      if (passwordNueva.length < 4) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+      }
+
+      const user = await UsuarioModel.findById(req.user.sub);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      const ok = await user.compararPassword(passwordActual);
+      if (!ok) {
+        return res.status(400).json({ error: 'Contraseña actual incorrecta' });
+      }
+
+      user.password = passwordNueva;
+      await user.save();
+
+      return res.status(200).json({ message: 'Contraseña cambiada exitosamente' });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error cambiando contraseña' });
+    }
   }
 }
+
+export default AuthManager;

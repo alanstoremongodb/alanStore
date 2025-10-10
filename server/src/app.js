@@ -34,7 +34,25 @@ app.engine('hbs', engine({ extname: '.hbs' }));
 app.set('view engine', 'hbs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
+// CORS: permitir múltiples orígenes separados por coma en CORS_ORIGIN
+const rawOrigins = process.env.CORS_ORIGIN || '';
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const corsConfig = {
+  origin: (origin, callback) => {
+    // permitir herramientas server-to-server (sin origin) o coincidencias explícitas
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'), false);
+  },
+  credentials: true,
+};
+
+app.use(cors(corsConfig));
+app.options('*', cors(corsConfig));
 app.use(cookieParser());
 app.use(express.json());
 
