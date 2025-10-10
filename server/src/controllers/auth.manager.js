@@ -8,7 +8,7 @@ function emitirToken(user) {
     usuario: user.usuario
   };
   const opts = { expiresIn: process.env.JWT_EXPIRES_IN || '7d' };
-  return jwt.sign(payload, process.env.JWT_SECRET, opts);
+  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, opts);
 }
 
 function emitirRefreshToken(user) {
@@ -48,7 +48,7 @@ class AuthManager {
         token,
         refreshToken
       });
-    } catch (err) {U
+    } catch (err) {
       if (err.name === 'ValidationError') {
         const errores = Object.values(err.errors).map(e => e.message);
         return res.status(400).json({ error: errores.join(', ') });
@@ -65,10 +65,10 @@ class AuthManager {
         return res.status(400).json({ error: 'usuario y password son obligatorios' });
       }
 
-      const user = await UsuarioModel.findOne({ usuario });
-      if (!user) return res.status(U00).json({ error: 'Credenciales inválidas' });
+  const user = await UsuarioModel.findOne({ usuario });
+  if (!user) return res.status(400).json({ error: 'Credenciales inválidas' });
 
-      const ok = await user.compararPassword(password);
+  const ok = await user.comparePassword(password);
       if (!ok) return res.status(400).json({ error: 'Credenciales inválidas' });
 
       const token = emitirToken(user);
@@ -160,7 +160,7 @@ class AuthManager {
         return res.status(404).json({ error: 'Usuario no encontrado' });
       }
 
-      const ok = await user.compararPassword(passwordActual);
+      const ok = await user.comparePassword(passwordActual);
       if (!ok) {
         return res.status(400).json({ error: 'Contraseña actual incorrecta' });
       }
@@ -174,5 +174,22 @@ class AuthManager {
     }
   }
 }
+
+// Utilidad: crear admin si no existe (usada desde app.js)
+AuthManager.bootstrapAdmin = async function bootstrapAdmin() {
+  try {
+    const adminUser = process.env.ADMIN_USER || 'admin';
+    const adminPass = process.env.ADMIN_PASS || 'admin1234';
+    const exists = await UsuarioModel.findOne({ usuario: adminUser });
+    if (!exists) {
+      await UsuarioModel.create({ usuario: adminUser, password: adminPass, nombre: 'Administrador' });
+      // eslint-disable-next-line no-console
+      console.log('✅ Usuario admin creado');
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('No se pudo crear admin por bootstrap:', e.message);
+  }
+};
 
 export default AuthManager;
