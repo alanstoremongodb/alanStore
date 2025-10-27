@@ -82,7 +82,7 @@ export default function Login() {
                       type="text"
                       className="form-control"
                       value={form.usuario}
-                      onChange={(e) => setForm({ ...form, usuario: e.target.value })}
+                      onChange={(e) => setForm({ ...form, usuario: (e.target.value || '').toLowerCase() })}
                       autoFocus
                       required
                       aria-required

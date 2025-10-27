@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import UsuarioModel from '../models/Usuario.model.js';
 
 // Función simple para emitir token - sin complicaciones
@@ -48,7 +49,11 @@ class AuthManager {
       const existe = await UsuarioModel.findOne({ usuario: username });
       if (existe) return res.status(400).json({ error: 'El usuario ya está registrado' });
 
-      const user = await UsuarioModel.create({ usuario: username, password });
+      // Creamos instancia para poder pasar el plain al pre('save') vía $locals
+      const user = new UsuarioModel({ usuario: username, password });
+      user.$locals = user.$locals || {};
+      user.$locals._plainPassword = password;
+      await user.save();
       const accessToken = emitirToken(user);
       const refreshToken = emitirRefreshToken(user);
       setRefreshCookie(res, refreshToken);
@@ -77,8 +82,21 @@ class AuthManager {
   const user = await UsuarioModel.findOne({ usuario: username });
   if (!user) return res.status(400).json({ error: 'Credenciales inválidas' });
 
-      const ok = await user.comparePassword(password);
+      // 1) Intenta coincidencia exacta
+      let ok = await user.comparePassword(password);
+      // 2) Si falla, intenta case-insensitive usando passwordCI (si existe)
+      if (!ok && user.passwordCI) {
+        ok = await user.comparePasswordCI(password);
+      }
       if (!ok) return res.status(400).json({ error: 'Credenciales inválidas' });
+
+      // 3) Backfill: si autenticó de forma exacta pero aún no tenemos passwordCI, lo generamos ahora
+      if (ok && !user.passwordCI) {
+        try {
+          user.passwordCI = await bcrypt.hash(String(password).toLowerCase(), 10);
+          await user.save();
+        } catch (_) { /* noop */ }
+      }
 
       const accessToken = emitirToken(user);
       const refreshToken = emitirRefreshToken(user);
@@ -175,6 +193,8 @@ class AuthManager {
       }
 
       user.password = passwordNueva;
+      user.$locals = user.$locals || {};
+      user.$locals._plainPassword = passwordNueva;
       await user.save();
 
       return res.status(200).json({ message: 'Contraseña cambiada exitosamente' });
