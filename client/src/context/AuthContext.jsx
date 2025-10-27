@@ -32,7 +32,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async ({ usuario, password }) => {
-    const r = await axios.post(`${BASE_URL}/auth/login`, { usuario, password }, { withCredentials: true });
+    const payload = { usuario: (usuario || '').trim().toLowerCase(), password };
+    const r = await axios.post(`${BASE_URL}/auth/login`, payload, { withCredentials: true });
     const token = r.data?.accessToken;
     if (token) localStorage.setItem('accessToken', token);
     setUser(r.data.user);

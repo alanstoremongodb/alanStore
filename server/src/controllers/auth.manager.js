@@ -36,7 +36,8 @@ class AuthManager {
   static async register(req, res) {
     try {
       const { usuario, password } = req.body;
-      if (!usuario || !password) {
+      const username = (usuario || '').trim().toLowerCase();
+      if (!username || !password) {
         return res.status(400).json({ error: 'usuario y password son obligatorios' });
       }
 
@@ -44,10 +45,10 @@ class AuthManager {
         return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
       }
 
-      const existe = await UsuarioModel.findOne({ usuario });
+      const existe = await UsuarioModel.findOne({ usuario: username });
       if (existe) return res.status(400).json({ error: 'El usuario ya está registrado' });
 
-      const user = await UsuarioModel.create({ usuario, password });
+      const user = await UsuarioModel.create({ usuario: username, password });
       const accessToken = emitirToken(user);
       const refreshToken = emitirRefreshToken(user);
       setRefreshCookie(res, refreshToken);
@@ -68,11 +69,12 @@ class AuthManager {
   static async login(req, res) {
     try {
       const { usuario, password } = req.body;
-      if (!usuario || !password) {
+      const username = (usuario || '').trim().toLowerCase();
+      if (!username || !password) {
         return res.status(400).json({ error: 'usuario y password son obligatorios' });
       }
 
-  const user = await UsuarioModel.findOne({ usuario });
+  const user = await UsuarioModel.findOne({ usuario: username });
   if (!user) return res.status(400).json({ error: 'Credenciales inválidas' });
 
       const ok = await user.comparePassword(password);
