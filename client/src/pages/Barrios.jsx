@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../lib/api';
 import { alertSuccess, alertError } from '../lib/dialog';
@@ -30,6 +30,7 @@ export default function Barrios() {
   const [mInitial, setMInitial] = useState(EMPTY);
   const [mTitle, setMTitle] = useState('');
   const [mConfirmLabel, setMConfirmLabel] = useState('Guardar');
+  const submitLock = useRef(false);
 
   const nav = useNavigate();
   const loc = useLocation();
@@ -90,6 +91,8 @@ export default function Barrios() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (submitLock.current) return; // anti doble submit
+    submitLock.current = true;
     setLoading(true);
     try {
       if (editingId) {
@@ -114,6 +117,7 @@ export default function Barrios() {
       await alertError(e2?.response?.data?.error || 'Error guardando barrio');
     } finally {
       setLoading(false);
+      submitLock.current = false;
     }
   };
 

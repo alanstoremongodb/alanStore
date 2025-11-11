@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../lib/api';
 import { alertSuccess, alertError } from '../lib/dialog';
 import { FiSearch, FiPlus } from 'react-icons/fi';
@@ -27,6 +27,7 @@ export default function Productos() {
   const [mInitial, setMInitial] = useState(EMPTY);
   const [mTitle, setMTitle] = useState('');
   const [mConfirmLabel, setMConfirmLabel] = useState('Guardar');
+  const submitLock = useRef(false);
 
   const nav = useNavigate();
   const loc = useLocation();
@@ -86,6 +87,8 @@ export default function Productos() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (submitLock.current) return; // anti doble submit
+    submitLock.current = true;
     setLoading(true);
     const payload = {
       nombre: form.nombre,
@@ -105,7 +108,7 @@ export default function Productos() {
       setForm(EMPTY); setEditingId(null); setMode('list'); load();
     } catch (e2) {
       await alertError(e2?.response?.data?.error || 'Error guardando producto');
-    } finally { setLoading(false); }
+    } finally { setLoading(false); submitLock.current = false; }
   };
 
   // ===== FORM =====

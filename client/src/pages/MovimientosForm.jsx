@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { alertSuccess, alertError } from '../lib/dialog';
@@ -51,6 +51,7 @@ export default function MovimientosForm({
 
   const nav = useNavigate();
   const loc = useLocation();
+  const submitLock = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -223,6 +224,9 @@ export default function MovimientosForm({
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    // Guard anti doble submit ultra-rápido
+    if (submitLock.current) return;
+    submitLock.current = true;
     if (!validate()) return;
     setLoading(true);
 
@@ -283,6 +287,7 @@ export default function MovimientosForm({
     } catch (e2) {
       await alertError(e2?.response?.data?.error || 'Error guardando movimiento');
     } finally { setLoading(false); }
+    submitLock.current = false;
   };
 
   const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('es-AR')}`;

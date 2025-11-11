@@ -28,6 +28,7 @@ export default function FormDialog({
 }) {
   const [values, setValues] = useState(() => ({ ...initialValues }));
   const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
   const firstRef = useRef(null);
   // Evitar bucles: si initialValues es un nuevo objeto en cada render, no lo pongas directo en deps.
   // Usamos una firma estable (JSON) para detectar cambios reales.
@@ -138,7 +139,7 @@ export default function FormDialog({
     );
   }), [fields, values, errors]);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     // basic required validation
     const nextErrors = {};
     for (const f of fields) {
@@ -159,7 +160,16 @@ export default function FormDialog({
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
-    onConfirm?.(values);
+    if (busy) return;
+    try {
+      setBusy(true);
+      const ret = onConfirm?.(values);
+      if (ret && typeof ret.then === 'function') {
+        await ret;
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -203,9 +213,10 @@ export default function FormDialog({
               className="pill-cta pill-cta--light"
               onClick={handleConfirm}
               autoFocus
+              disabled={busy}
               style={actionBtnStyle}
             >
-              {confirmLabel}
+              {busy ? 'Procesando…' : confirmLabel}
             </button>
             <button
               type="button"
