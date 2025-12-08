@@ -133,7 +133,7 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
     // ---------- CARGA (compra) ----------
   if (m.tipo === 'carga') {
       // Nuevo: además de registrar por producto, agregaremos un row agregado por tipo ("carga")
-      // 1) totales del movimiento para aplicar descuento a costo unitario
+      // 1) totales del movimiento para prorratear descuento
       let totalQty = 0;
       let totalCostoBruto = 0;
       for (const it of items) {
@@ -142,7 +142,19 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
       }
       const desc = Number(m.descuentoTotal || 0);
       const costoTotalNeto = Math.max(0, totalCostoBruto - desc);
-      const newCost = totalQty > 0 ? (costoTotalNeto / totalQty) : null;
+      // Costo unitario por producto (histórico al momento de la compra)
+      const costPerProduct = new Map(); // pid -> new unit cost
+      for (const it of items) {
+        const pid = (it.producto && it.producto._id) ? it.producto._id.toString()
+          : (typeof it.producto === 'string' ? it.producto : null);
+        if (!pid) continue;
+        const qty = Number(it.cantidad || 0);
+        const costoItemBruto = Number(it.costoTotal || 0);
+        const prDesc = totalCostoBruto > 0 ? (costoItemBruto / totalCostoBruto) : 0;
+        const costoItemNeto = Math.max(0, costoItemBruto - desc * prDesc);
+        const newUnitCost = qty > 0 ? (costoItemNeto / qty) : null;
+        costPerProduct.set(pid, newUnitCost);
+      }
 
       // 2) revalorización al momento de la compra (si había stock previo con costo anterior)
       //    la computamos una sola vez POR PRODUCTO considerando el stock previo.
@@ -155,6 +167,7 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
         touched.add(pid);
 
         const st = state.get(pid) || { stock: 0, cost: null };
+        const newCost = costPerProduct.get(pid);
         if (newCost != null && st.cost != null && st.stock > 0) {
           const reval = (newCost - st.cost) * st.stock;
           // Reval solo aplica al filtro de producto (no atribuimos a comercio/barrio)
@@ -178,6 +191,7 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
         const qty = Number(it.cantidad || 0);
 
         const st = state.get(pid) || { stock: 0, cost: null };
+        const newCost = costPerProduct.get(pid);
         if (newCost != null) st.cost = newCost;
         st.stock += qty;
         state.set(pid, st);
@@ -192,8 +206,8 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
           // solo atribuimos costo prorrateado si el filtro deja pasar este producto
           if (!passesFilter(m, { producto: pid })) continue;
           const qty = Number(it.cantidad || 0);
-          const pr = qty / totalQty;
-          bump('producto', makeKey('producto', m, { producto: pid }), { costo: costoTotalNeto * pr });
+          const newCost = costPerProduct.get(pid) || 0;
+          bump('producto', makeKey('producto', m, { producto: pid }), { costo: newCost * qty });
         }
       }
 
@@ -227,17 +241,13 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
         const vBruta = Number(it.ventaTotal || 0);
 
         const st = state.get(pid) || { stock: 0, cost: null };
-        if (st.cost == null || st.stock < qty) {
-          const fechaStr = moment(m.fecha).tz(TZ).format('YYYY-MM-DD');
-          const err = new Error(`Venta inválida: producto=${pid}, fecha=${fechaStr}. No hay costo vigente o stock suficiente.`);
-          err.status = 400;
-          throw err;
-        }
+        // En estadísticas, evitar error: si falta costo, considerar costo 0; si falta stock, valuar hasta stock disponible
+        const qtyValuada = Math.max(0, Math.min(qty, st.stock));
 
         const pr = totalVentaBruta > 0 ? (vBruta / totalVentaBruta) : 0;
         const vNetaItem = ventaNetaTotal * pr;
 
-        const costoCorr = st.cost * qty;
+        const costoCorr = (st.cost || 0) * qtyValuada;
         const ganGenuina = vNetaItem - costoCorr;
 
         if (inPeriod(m.fecha) && passesFilter(m, it)) {
@@ -295,15 +305,9 @@ async function computeStats({ unit, year, month, quarter, top, filterProducto, f
         if (!pid) continue;
         const qty = Number(it.cantidad || 0);
         const st = state.get(pid) || { stock: 0, cost: null };
-        // Validación de costo / stock suficiente (similar a venta) para reflejar valor
-        if (st.cost == null || (m.tipo !== 'carga' && st.stock < qty)) {
-          // Para reposicion y faltante exigimos stock suficiente
-          const fechaStr = moment(m.fecha).tz(TZ).format('YYYY-MM-DD');
-            const err = new Error(`${m.tipo} inválida: producto=${pid}, fecha=${fechaStr}. No hay costo vigente o stock suficiente.`);
-            err.status = 400;
-            throw err;
-        }
-        const costCorr = (st.cost || 0) * qty;
+        // En estadísticas no lanzamos error: si falta costo, valuamos a 0; si falta stock, valuamos hasta el stock disponible
+        const qtyValuada = Math.max(0, Math.min(qty, st.stock));
+        const costCorr = (st.cost || 0) * qtyValuada;
         totalQty += qty;
         totalCosto += costCorr;
         // Ajuste de stock real
